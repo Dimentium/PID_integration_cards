@@ -19,10 +19,13 @@ The card is configured with departure board **devices**, not entities, because t
 | Translation key | Entity                       | Used for |
 |:----------------|:-----------------------------|:---------|
 | `route_name`    | `sensor` per departure       | All departure data, from its attributes |
+| `stop_name`    | `sensor` per board           | Exact stop name for the optional per-row label and stop-specific settings |
 | `infotext`      | `binary_sensor`              | Service alert |
 | `updated`       | `sensor`                     | Time of the last successful update, for the stale data warning |
 
 When the integration renames these keys or the attributes of the `route_name` sensors, the card has to be updated too.
+
+Optional stop settings are keyed by the exact stop name. This applies one rule set to every selected platform of that stop; a device ID can override individual fields for one board. The route filter and scheduled-time departure window are applied before sorting and the maximum-departure limit. The stop-name sensor exposes the integration's `walking_time_offset`; countdown thresholds derive from it unless overridden by stop or device settings.
 
 ## Performance
 

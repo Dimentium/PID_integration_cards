@@ -11,10 +11,13 @@ The card displays data from the [PID Departure Boards integration](https://githu
 
 ## Features
 
-- **Live countdown** recalculated in the browser every 15 seconds between the integration's one-minute updates, rounded down so it never promises more time than there is
+- **Live countdown to the scheduled departure**, recalculated in the browser every 15 seconds between the integration's one-minute updates; delays are shown separately
 - **Delays at a glance**: scheduled time with a delay badge (orange up to 4 minutes, red from 5), early departures in blue, a calendar icon for trips without real-time data
 - **Cancelled trips**, **vehicles at the stop** and the stop's **service alerts**
 - **Several platforms in one list**: select more departure boards, e.g. all platforms of a stop, and their departures are merged and sorted by time
+- **Departure time window**: limit the card to departures within a global time horizon, with per-stop or per-board overrides
+- **Per-stop controls**: show or hide the stop name and direction, filter routes with an allowlist or denylist, and set countdown thresholds for each stop
+- **Walking-time-aware colors**: derive countdown thresholds from the integration's walking time offset, with global modifiers and per-stop overrides
 - **Stable layout**: every value has its own column shared by all rows, so a delay or a cancellation never shifts the other rows
 - **Fits any column**: one line per departure on wide cards, a stacked layout on medium and narrow ones, and a compact mode for wall panels
 - **Line colours** of PID (metro A/B/C, tram, bus, trolleybus, train, ferry, funicular, night lines), adjustable by a theme
@@ -46,7 +49,7 @@ HACS registers the card with your dashboards automatically.
 
 1. Download `pid-departures-card.js` from the [latest release](https://github.com/dvejsada/PID_integration_cards/releases/latest) and copy it to `config/www/`.
 2. Go to **Settings → Dashboards**, select the **⋮** menu and choose **Resources**. If the menu is missing, enable **Advanced mode** in your user profile.
-3. Add a resource with the URL `/local/pid-departures-card.js?v=1.0.0` and the type **JavaScript module**. Increase the `v` number with every update, otherwise browsers keep the old version.
+3. Add a resource with the URL `/local/pid-departures-card.js?v=1.0.0-alpha.6` and the type **JavaScript module**. Increase the `v` number with every update, otherwise browsers keep the old version.
 4. Reload the browser.
 
 ## Usage
@@ -70,13 +73,55 @@ devices:
 | `devices`        | *required*               | Departure boards to show. With more than one, their departures are merged and sorted by time. |
 | `title`          | stop name                | Card title. |
 | `max_departures` | all                      | Maximum number of departures. The upper limit is the *number of departures* set in the integration. |
+| `departure_window_minutes` | unset | Show only departures scheduled within this many minutes. The countdown uses scheduled time. |
 | `time_format`    | `both`                   | `both`: countdown and scheduled time, `relative`: countdown only, `absolute`: scheduled time only. |
 | `show_header`    | `true`                   | Show the title. |
 | `show_infotext`  | `true`                   | Show the service alert of the stop. Tap it to read the whole text. |
 | `show_delay`     | `true`                   | Show the delay column. |
 | `show_platform`  | `true` with 2+ boards    | Show the platform column. |
+| `show_direction` | `true`                   | Show the trip destination/direction. |
+| `show_stop_name` | `false`                  | Show the selected board's stop name below the direction. |
+| `color_countdown` | `true` | Enable countdown coloring, including automatic and per-stop thresholds. |
+| `walking_time_offset_yellow_modifier` | `"+5"` | Global modifier for the yellow threshold. |
+| `walking_time_offset_red_modifier` | `"+1"` | Global modifier for the red threshold. |
+| `walking_time_offset_hide_modifier` | `"/2"` | Global modifier for the hide threshold. |
+| `stop_settings`  | —                         | Per-stop route filters and countdown thresholds; see below. |
 | `hide_departed`  | `true`                   | Hide departures that have already left. |
 | `compact`        | `false`                  | One line per departure, smaller rows. |
+
+### Per-stop rules
+
+`stop_settings` is keyed by the exact stop name from the integration. Settings therefore apply to all selected platforms of that stop. A device ID can override settings for one board; omitted fields inherit the stop's settings. `departure_window_minutes` can also be set per stop (or device) to override the global window; set it to `0` to show departures at any time for that stop. A route filter is optional. An allowlist shows only the listed routes; a denylist hides only the listed routes. If no filter is set, all routes from that stop are shown.
+
+To exclude selected lines instead, set `mode: denylist`; the `routes` list then contains the lines to hide.
+
+Countdown thresholds are minutes before the **scheduled** departure; delays do not shift the countdown. When a board has a positive `walking_time_offset` from the integration, automatic thresholds are calculated from it using the global modifiers: yellow is offset `+5`, red is offset `+1`, and hide is offset `/2` by default. Modifiers accept arithmetic forms such as `+5`, `-2`, `*2` or `/2`.
+
+A stop's or device's `countdown` values override the corresponding automatic threshold. Set a manual value to `0` to disable that threshold. The hide threshold leaves cancelled trips and vehicles already at the stop visible. Set `color_countdown: false` to turn off countdown colors; hiding by threshold still works. By default, the integration filters departures inside a positive walking-time offset. Enable `include_departures_within_walking_offset` in that board's integration options to pass them to the card for countdown coloring and hiding.
+
+Example for two boards:
+
+    stop_settings:
+      "V Roklích":
+        departure_window_minutes: 30
+        route_filter:
+          mode: allowlist
+          routes: ["336"]
+        countdown:
+          yellow_minutes: 8
+          red_minutes: 4
+          hide_minutes: 2
+      "Háje":
+        departure_window_minutes: 0
+        route_filter:
+          mode: allowlist
+          routes: ["347"]
+        countdown:
+          yellow_minutes: 10
+          red_minutes: 5
+          hide_minutes: 2
+
+Replace the example keys with the exact stop names. The visual editor's stop rules field accepts YAML.
 
 ### Examples
 

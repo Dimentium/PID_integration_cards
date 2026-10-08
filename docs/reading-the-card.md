@@ -11,7 +11,7 @@ Each row is one departure. From left to right:
 | Platform     | with 2+ boards, or `show_platform: true` | Platform code of the stop the departure leaves from. |
 | Time         | `time_format: both` or `absolute` | Scheduled departure time. |
 | Delay        | `show_delay: true`       | Delay in minutes, or a calendar icon when there are no real-time data. Empty means on time. |
-| Countdown    | `time_format: both` or `relative` | Minutes until the vehicle actually leaves, delay included. |
+| Countdown    | `time_format: both` or `relative` | Minutes until the scheduled departure; delay is shown separately. |
 
 ## Countdown
 
@@ -19,14 +19,26 @@ Each row is one departure. From left to right:
 |:-------------|:--------|
 | `5 min`      | Leaves in 5 to 6 minutes. The value is rounded down, so the card never promises more time than there is. |
 | `<1 min`     | Leaves within a minute. |
-| `now`        | The departure time has passed, but the vehicle has not reported leaving yet. |
+| `now`        | The scheduled departure time has passed. |
 | `at stop`    | The vehicle is standing at the stop. |
 | `Canceled`   | The trip is cancelled. The row is greyed out and the time crossed out. |
-| *(empty)*    | Leaves in an hour or more, the time column says when. With `time_format: relative` the expected time is shown instead. |
+| *(empty)*    | The scheduled departure is in an hour or more, so the time column says when. With `time_format: relative` the scheduled time is shown instead. |
 
-Departures leaving within two minutes have their countdown highlighted in the theme's primary colour.
+With `color_countdown: true`, departures within two minutes use the theme's primary colour when no custom thresholds are active.
+
+When the integration provides a positive `walking_time_offset`, the card derives thresholds from it. The global modifiers default to yellow `+5`, red `+1`, and hide `/2`; for example, an offset of 10 minutes gives thresholds of 15, 11, and 5 minutes. You can change the modifiers in the card editor. A stop's or device's `countdown` settings override each derived threshold; set a manual threshold to `0` to disable it. The hide threshold does not hide canceled trips or a vehicle already at the stop. Set `color_countdown: false` to disable colors without disabling threshold-based hiding. By default, the integration filters departures inside a positive walking-time offset. Enable `include_departures_within_walking_offset` in that board's integration options to pass them to the card.
 
 The integration fetches data from the API once a minute; the card recalculates the countdown every 15 seconds in between, so it keeps counting down even without new data.
+
+## Stop name, direction, and route filters
+
+The direction is the trip destination supplied by the integration. The optional stop name is the exact stop name supplied by the integration, shown below the direction. Both can be toggled in the card editor.
+
+Route filters are configured separately for each stop under `stop_settings`. An `allowlist` shows only the route codes in its `routes` list; a `denylist` hides those route codes. Without a filter, the stop's routes are unchanged.
+
+Set `departure_window_minutes` at the card level to show only trips scheduled within that many minutes. A stop or device can override it in `stop_settings`; use `0` to remove the window for that stop. The window and countdown use scheduled departure time.
+
+Countdown settings use the same per-stop object. Values are minutes to the scheduled departure; delay does not shift the countdown or its color thresholds. For example, with yellow at 8, red at 4, and hide at 2, a countdown at or below 8 minutes is yellow, at or below 4 is red, and at or below 2 is hidden.
 
 ## Delay
 
@@ -38,7 +50,7 @@ The integration fetches data from the API once a minute; the card recalculates t
 | blue `−1`        | Early. |
 | calendar icon    | No real-time data for this trip, the times are from the timetable. |
 
-The time column always shows the **scheduled** time, the same way PID departure boards at stops do: `18:06 +2` means scheduled at 18:06 and running two minutes late. The countdown already includes the delay.
+The time column always shows the **scheduled** time, the same way PID departure boards at stops do: `18:06 +2` means scheduled at 18:06 and running two minutes late. The countdown is based on the scheduled time and does not include the delay.
 
 ## Icons below the destination
 

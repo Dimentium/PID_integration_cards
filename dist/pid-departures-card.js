@@ -9,7 +9,7 @@
  * entity IDs are generated from translated names and differ per language.
  */
 
-const CARD_VERSION = "1.0.0-alpha.2";
+const CARD_VERSION = "1.0.0-alpha.6";
 const DOMAIN = "pid_departures";
 const CARD_TYPE = "pid-departures-card";
 const EDITOR_TYPE = "pid-departures-card-editor";
@@ -27,6 +27,12 @@ const DEFAULTS = {
   show_header: true,
   show_infotext: true,
   show_delay: true,
+  show_stop_name: false,
+  show_direction: true,
+  color_countdown: true,
+  walking_time_offset_yellow_modifier: "+5",
+  walking_time_offset_red_modifier: "+1",
+  walking_time_offset_hide_modifier: "/2",
   hide_departed: true,
   compact: false,
 };
@@ -58,6 +64,7 @@ const TRANSLATIONS = {
       devices: "Departure boards",
       title: "Title (default: stop name)",
       max_departures: "Maximum departures",
+      departure_window_minutes: "Show departures within (minutes)",
       time_format: "Departure time",
       time_format_both: "Countdown and time",
       time_format_relative: "Countdown only",
@@ -66,6 +73,13 @@ const TRANSLATIONS = {
       show_infotext: "Show service alerts",
       show_delay: "Show delay",
       show_platform: "Show platform",
+      show_stop_name: "Show stop name",
+      show_direction: "Show direction",
+      color_countdown: "Color countdown",
+      walking_time_offset_yellow_modifier: "Yellow threshold modifier",
+      walking_time_offset_red_modifier: "Red threshold modifier",
+      walking_time_offset_hide_modifier: "Hide threshold modifier",
+      stop_settings: "Per-stop rules (YAML; stop name or device ID)",
       hide_departed: "Hide departed",
       compact: "Compact layout",
     },
@@ -96,6 +110,7 @@ const TRANSLATIONS = {
       devices: "Odjezdové tabule",
       title: "Nadpis (výchozí: název zastávky)",
       max_departures: "Maximální počet odjezdů",
+      departure_window_minutes: "Zobrazit odjezdy v příštích (minutách)",
       time_format: "Čas odjezdu",
       time_format_both: "Odpočet a čas",
       time_format_relative: "Pouze odpočet",
@@ -104,6 +119,13 @@ const TRANSLATIONS = {
       show_infotext: "Zobrazit mimořádnosti",
       show_delay: "Zobrazit zpoždění",
       show_platform: "Zobrazit nástupiště",
+      show_stop_name: "Zobrazit název zastávky",
+      show_direction: "Zobrazit směr",
+      color_countdown: "Barvit odpočet",
+      walking_time_offset_yellow_modifier: "Úprava žlutého prahu",
+      walking_time_offset_red_modifier: "Úprava červeného prahu",
+      walking_time_offset_hide_modifier: "Úprava prahu skrytí",
+      stop_settings: "Pravidla pro zastávky (YAML; název zastávky nebo ID zařízení)",
       hide_departed: "Skrýt odjeté spoje",
       compact: "Kompaktní rozložení",
     },
@@ -134,6 +156,7 @@ const TRANSLATIONS = {
       devices: "Odchodové tabule",
       title: "Nadpis (predvolený: názov zastávky)",
       max_departures: "Maximálny počet odchodov",
+      departure_window_minutes: "Zobraziť odchody v nasledujúcich (minútach)",
       time_format: "Čas odchodu",
       time_format_both: "Odpočet a čas",
       time_format_relative: "Iba odpočet",
@@ -142,6 +165,13 @@ const TRANSLATIONS = {
       show_infotext: "Zobraziť mimoriadnosti",
       show_delay: "Zobraziť meškanie",
       show_platform: "Zobraziť nástupište",
+      show_stop_name: "Zobraziť názov zastávky",
+      show_direction: "Zobraziť smer",
+      color_countdown: "Farbiť odpočet",
+      walking_time_offset_yellow_modifier: "Úprava žltého prahu",
+      walking_time_offset_red_modifier: "Úprava červeného prahu",
+      walking_time_offset_hide_modifier: "Úprava prahu skrytia",
+      stop_settings: "Pravidlá pre zastávky (YAML; názov zastávky alebo ID zariadenia)",
       hide_departed: "Skryť odídené spoje",
       compact: "Kompaktné rozloženie",
     },
@@ -172,6 +202,7 @@ const TRANSLATIONS = {
       devices: "Abfahrtstafeln",
       title: "Titel (Standard: Haltestellenname)",
       max_departures: "Maximale Anzahl Abfahrten",
+      departure_window_minutes: "Abfahrten innerhalb der nächsten (Minuten) anzeigen",
       time_format: "Abfahrtszeit",
       time_format_both: "Countdown und Uhrzeit",
       time_format_relative: "Nur Countdown",
@@ -180,6 +211,13 @@ const TRANSLATIONS = {
       show_infotext: "Störungsmeldungen anzeigen",
       show_delay: "Verspätung anzeigen",
       show_platform: "Steig anzeigen",
+      show_stop_name: "Haltestellenname anzeigen",
+      show_direction: "Richtung anzeigen",
+      color_countdown: "Countdown einfärben",
+      walking_time_offset_yellow_modifier: "Modifikator für Gelb",
+      walking_time_offset_red_modifier: "Modifikator für Rot",
+      walking_time_offset_hide_modifier: "Modifikator zum Ausblenden",
+      stop_settings: "Regeln pro Haltestelle (YAML; Haltestellenname oder Geräte-ID)",
       hide_departed: "Abgefahrene ausblenden",
       compact: "Kompaktes Layout",
     },
@@ -226,7 +264,50 @@ function normalizeConfig(config) {
   }
   const raw = config.devices ?? config.device ?? [];
   const devices = [...new Set(Array.isArray(raw) ? raw : [raw])].filter(Boolean);
-  return { ...DEFAULTS, ...config, devices };
+  const stopSettings = config.stop_settings && typeof config.stop_settings === "object"
+    && !Array.isArray(config.stop_settings) ? config.stop_settings : {};
+  return { ...DEFAULTS, ...config, devices, stop_settings: stopSettings };
+}
+
+function positiveMinutes(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const minutes = Number(value);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+}
+
+function applyOffsetModifier(offset, modifier) {
+  const match = String(modifier ?? "").trim().match(/^([+\-*\/])\s*(\d+(?:\.\d+)?)$/);
+  if (!match) return offset;
+  const amount = Number(match[2]);
+  let value;
+  switch (match[1]) {
+    case "+": value = offset + amount; break;
+    case "-": value = offset - amount; break;
+    case "*": value = offset * amount; break;
+    case "/": value = amount === 0 ? null : offset / amount; break;
+    default: return offset;
+  }
+  return value !== null && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function passesRouteFilter(routeName, filter) {
+  if (!filter || !["allowlist", "denylist"].includes(filter.mode) || !Array.isArray(filter.routes)) {
+    return true;
+  }
+  const routes = new Set(filter.routes.map((route) => String(route).trim()).filter(Boolean));
+  const matches = routes.has(String(routeName ?? ""));
+  return filter.mode === "allowlist" ? matches : !matches;
+}
+
+function countdownColor(departure, now, enabled) {
+  if (!enabled || departure.attrs.is_canceled) return "";
+  const countdown = departure.stopSettings?.countdown || {};
+  const remaining = departure.scheduled - now;
+  const red = positiveMinutes(countdown.red_minutes);
+  const yellow = positiveMinutes(countdown.yellow_minutes);
+  if (red !== null && remaining <= red * 60 * 1000) return "red";
+  if (yellow !== null && remaining <= yellow * 60 * 1000) return "yellow";
+  return "";
 }
 
 /**
@@ -257,6 +338,7 @@ function resolveBoards(hass, deviceIds) {
       routeEntities: entries
         .filter((e) => e.translation_key === "route_name" && e.entity_id.startsWith("sensor."))
         .map((e) => e.entity_id),
+      stopNameEntity: find("sensor", "stop_name"),
       infotextEntity: find("binary_sensor", "infotext"),
       updatedEntity: find("sensor", "updated"),
     };
@@ -324,7 +406,7 @@ class PidDeparturesCard extends HTMLElement {
       this._devicesRef = hass.devices;
       this._boards = resolveBoards(hass, this._config.devices);
       this._watched = this._boards.flatMap((b) => [
-        ...b.routeEntities, b.infotextEntity, b.updatedEntity,
+        ...b.routeEntities, b.stopNameEntity, b.infotextEntity, b.updatedEntity,
       ]).filter(Boolean);
       this._render();
       return;
@@ -375,22 +457,61 @@ class PidDeparturesCard extends HTMLElement {
   _departures(now) {
     const departures = [];
     for (const board of this._boards) {
+      const stopNameState = board.stopNameEntity && this._hass.states[board.stopNameEntity];
+      const stopName = stopNameState && !["unavailable", "unknown"].includes(stopNameState.state)
+        ? stopNameState.state : board.name;
+      const walkingOffset = positiveMinutes(stopNameState?.attributes?.walking_time_offset);
+      const stopSettingsForStop = this._config.stop_settings[stopName] || {};
+      const stopSettingsForDevice = this._config.stop_settings[board.deviceId] || {};
+      const automaticCountdown = walkingOffset === null ? {} : {
+        yellow_minutes: applyOffsetModifier(walkingOffset, this._config.walking_time_offset_yellow_modifier),
+        red_minutes: applyOffsetModifier(walkingOffset, this._config.walking_time_offset_red_modifier),
+        hide_minutes: applyOffsetModifier(walkingOffset, this._config.walking_time_offset_hide_modifier),
+      };
+      const stopSettings = {
+        ...stopSettingsForStop,
+        ...stopSettingsForDevice,
+        route_filter: stopSettingsForDevice.route_filter ?? stopSettingsForStop.route_filter,
+        countdown: {
+          ...automaticCountdown,
+          ...(stopSettingsForStop.countdown || {}),
+          ...(stopSettingsForDevice.countdown || {}),
+        },
+      };
       for (const entityId of board.routeEntities) {
         const stateObj = this._hass.states[entityId];
         if (!stateObj || ["unavailable", "unknown"].includes(stateObj.state)) continue;
         const a = stateObj.attributes;
+        const routeName = a.route_name ?? stateObj.state;
+        if (!passesRouteFilter(routeName, stopSettings.route_filter)) continue;
         const scheduled = parseDate(a.departure_time_sched) || parseDate(a.arrival_time_sched);
         const estimated = parseDate(a.departure_time_est) || parseDate(a.arrival_time_est) || scheduled;
         if (!estimated) continue;
-        departures.push({ entityId, attrs: a, scheduled: scheduled || estimated, estimated });
+        departures.push({
+          entityId, attrs: a, scheduled: scheduled || estimated, estimated,
+          stopName, stopSettings,
+        });
       }
     }
 
     departures.sort((x, y) => x.estimated - y.estimated);
 
-    const visible = this._config.hide_departed
-      ? departures.filter((d) => d.attrs.is_at_stop || d.estimated - now > -DEPARTED_GRACE_MS)
-      : departures;
+    const visible = departures.filter((d) => {
+      const windowMinutes = positiveMinutes(
+        d.stopSettings?.departure_window_minutes ?? this._config.departure_window_minutes,
+      );
+      if (windowMinutes !== null && d.scheduled - now > windowMinutes * 60 * 1000) return false;
+      const hideMinutes = positiveMinutes(d.stopSettings?.countdown?.hide_minutes);
+      if (
+        !d.attrs.is_canceled
+        && !d.attrs.is_at_stop
+        && hideMinutes !== null
+        && d.scheduled - now <= hideMinutes * 60 * 1000
+      ) return false;
+      return !this._config.hide_departed
+        || d.attrs.is_at_stop
+        || d.estimated - now > -DEPARTED_GRACE_MS;
+    });
     return this._config.max_departures ? visible.slice(0, this._config.max_departures) : visible;
   }
 
@@ -541,7 +662,7 @@ class PidDeparturesCard extends HTMLElement {
 
   _renderRow(d, now, t, fmt, columns) {
     const a = d.attrs;
-    const diffMs = d.estimated - now;
+    const diffMs = d.scheduled - now;
     const minutes = Math.floor(diffMs / 60000);
     const realtime = a.is_delay_avail === true;
     const delayMin = realtime ? Math.floor((a.delay_sec ?? 0) / 60) : 0;
@@ -556,8 +677,8 @@ class PidDeparturesCard extends HTMLElement {
     else if (minutes < 1) countdown = `<1 ${t.min}`;
     else if (minutes < 60) countdown = `${minutes} ${t.min}`;
     // A countdown in hours is harder to read than the time itself; the time
-    // column already shows it, otherwise show when it actually leaves.
-    else countdown = columns.includes("time") ? "" : fmt.format(d.estimated);
+    // column already shows it, otherwise show the scheduled time.
+    else countdown = columns.includes("time") ? "" : fmt.format(d.scheduled);
 
     // Scheduled time plus delay, the convention used on PID departure boards.
     let delay = "";
@@ -580,9 +701,7 @@ class PidDeparturesCard extends HTMLElement {
 
     const cells = {
       line: `<span class="line line--${lineClass(a)}" title="${escapeHtml(typeLabel)}">${escapeHtml(a.route_name || "?")}</span>`,
-      main: `
-        <div class="headsign">${escapeHtml(a.trip_headsign)}</div>
-        ${features ? `<div class="features">${features}</div>` : ""}`,
+      main: "",
       platform: a.stop_platform
         ? `<span class="platform" title="${escapeHtml(t.platform)}">${escapeHtml(a.stop_platform)}</span>` : "",
       time: escapeHtml(time),
@@ -590,9 +709,28 @@ class PidDeparturesCard extends HTMLElement {
       count: escapeHtml(countdown),
     };
 
-    const soon = !a.is_canceled && (a.is_at_stop || diffMs < 2 * 60000);
-    const label = [typeLabel, a.route_name, a.trip_headsign, a.stop_platform && `${t.platform} ${a.stop_platform}`,
-      time, countdown].filter(Boolean).join(", ");
+    cells.main = [
+      this._config.show_direction && a.trip_headsign
+        ? '<div class="headsign">' + escapeHtml(a.trip_headsign) + '</div>' : '',
+      this._config.show_stop_name && d.stopName
+        ? '<div class="stop-name">' + escapeHtml(d.stopName) + '</div>' : '',
+      features ? '<div class="features">' + features + '</div>' : '',
+    ].join("");
+    cells.count = '<span class="countdown-value ' + countdownColor(d, now, this._config.color_countdown) + '">'
+      + escapeHtml(countdown) + '</span>';
+
+    const customColors = positiveMinutes(d.stopSettings?.countdown?.yellow_minutes) !== null
+      || positiveMinutes(d.stopSettings?.countdown?.red_minutes) !== null;
+    const soon = this._config.color_countdown && !customColors && !a.is_canceled && (a.is_at_stop || diffMs < 2 * 60000);
+    const label = [
+      typeLabel,
+      a.route_name,
+      this._config.show_direction && a.trip_headsign,
+      this._config.show_stop_name && d.stopName,
+      a.stop_platform && `${t.platform} ${a.stop_platform}`,
+      time,
+      countdown,
+    ].filter(Boolean).join(", ");
 
     return `
       <div class="row ${a.is_canceled ? "canceled" : ""} ${soon ? "soon" : ""}"
@@ -737,6 +875,15 @@ const STYLES = `
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .stop-name {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.2;
+    color: var(--secondary-text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .features {
     display: flex;
     align-items: center;
@@ -776,6 +923,8 @@ const STYLES = `
     color: var(--primary-text-color);
   }
   .soon .count-cell { color: var(--primary-color); }
+  .countdown-value.yellow { color: var(--warning-color, #f9a825); }
+  .countdown-value.red { color: var(--error-color, #db4437); }
   .delay-cell { color: var(--secondary-text-color); --mdc-icon-size: 16px; }
   .badge {
     box-sizing: border-box;
@@ -883,8 +1032,10 @@ class PidDeparturesCardEditor extends HTMLElement {
       if (config[key] === defaultValue) delete config[key];
     }
     if (config.show_platform === (config.devices || []).length > 1) delete config.show_platform;
+    if (!config.stop_settings || Object.keys(config.stop_settings).length === 0) delete config.stop_settings;
     if (!config.title) delete config.title;
     if (!config.max_departures) delete config.max_departures;
+    if (!config.departure_window_minutes) delete config.departure_window_minutes;
     this._config = normalizeConfig(config);
     this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config }, bubbles: true, composed: true,
@@ -905,6 +1056,7 @@ function editorSchema(t) {
       name: "",
       schema: [
         { name: "max_departures", selector: { number: { min: 1, max: 50, mode: "box" } } },
+        { name: "departure_window_minutes", selector: { number: { min: 1, max: 1440, mode: "box" } } },
         {
           name: "time_format",
           selector: {
@@ -922,9 +1074,25 @@ function editorSchema(t) {
       type: "grid",
       name: "",
       schema: [
-        "show_header", "show_infotext", "show_delay", "show_platform", "hide_departed", "compact",
+        "show_header", "show_infotext", "show_delay", "show_platform", "hide_departed", "compact", "color_countdown",
       ].map((name) => ({ name, selector: { boolean: {} } })),
     },
+    {
+      type: "grid",
+      name: "",
+      schema: ["show_stop_name", "show_direction"]
+        .map((name) => ({ name, selector: { boolean: {} } })),
+    },
+    {
+      type: "grid",
+      name: "",
+      schema: [
+        "walking_time_offset_yellow_modifier",
+        "walking_time_offset_red_modifier",
+        "walking_time_offset_hide_modifier",
+      ].map((name) => ({ name, selector: { text: {} } })),
+    },
+    { name: "stop_settings", selector: { object: {} } },
   ];
 }
 

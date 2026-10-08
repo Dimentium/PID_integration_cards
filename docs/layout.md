@@ -4,11 +4,11 @@
 
 ## Columns
 
-The departures are laid out in columns shared by all rows: line, destination, platform, time, delay and countdown. Each column is as wide as its widest value, so values line up across rows whatever they contain: a delay badge, a cancellation, a long line number such as `X913` or a long label such as *v zastávce*.
+The departures are laid out in columns shared by all rows: line, destination, platform, time, delay and countdown. Each column is as wide as its widest value, so values line up across rows whatever they contain: a delay badge, a cancellation, a long line number such as `X913` or a long label such as *v zastávce*. When enabled, the stop name appears below the direction in the destination cell, so it does not add another column.
 
 The delay, countdown and platform columns also keep a minimum width, so the layout does not jump when values change between updates, e.g. when the first delay appears or *9 min* becomes *12 min*.
 
-Columns that are switched off (`show_delay`, `show_platform`, `time_format`) are left out entirely.
+Columns that are switched off (`show_delay`, `show_platform`, `time_format`) are left out entirely. The direction and stop name can also be toggled independently.
 
 ## Card width
 

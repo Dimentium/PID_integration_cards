@@ -101,6 +101,7 @@ function mockHass(boards, { language = "en", timeFormat = "24", staleMinutes = 0
       // No departures from the API (e.g. at night): departure sensors are unavailable.
       if (emptyBoards.includes(deviceId)) states[id] = { entity_id: id, state: "unavailable", attributes: {} };
     });
+    add(`sensor.${deviceId}_stop_name`, deviceId, "stop_name", board.name.replace(/ [A-Z]$/, ""));
     add(`binary_sensor.${deviceId}_infotext`, deviceId, "infotext", board.infotext ? "on" : "off",
       board.infotext ? { text: board.infotext.cs, text_en: board.infotext.en } : {});
     add(`sensor.${deviceId}_updated`, deviceId, "updated", new Date(now - staleMinutes * MIN).toISOString());
@@ -142,6 +143,15 @@ const BOARDS = [
 ];
 
 const SCENARIOS = [
+  { title: "Per-stop rules", config: {
+    devices: ["plananska_a"], show_stop_name: true, show_direction: false,
+    stop_settings: {
+      plananska_a: {
+        route_filter: { mode: "allowlist", routes: ["199", "22"] },
+        countdown: { yellow_minutes: 8, red_minutes: 4, hide_minutes: 1 },
+      },
+    },
+  } },
   { title: "Wide card (480 px)", width: 480, config: { devices: ["plananska_a"] } },
   { title: "Two platforms merged", config: { devices: ["palmovka_a", "palmovka_b"] } },
   { title: "Compact, stale data", config: { devices: ["plananska_a"], compact: true }, staleMinutes: 12 },
